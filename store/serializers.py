@@ -7,17 +7,10 @@ class CategorySerializer(serializers.ModelSerializer):
         fields = ('id', 'name', 'slug', 'image', 'description')
 
 class ProductImageSerializer(serializers.ModelSerializer):
-    image = serializers.SerializerMethodField()
-    
+    # This serializer is for internal use if needed
     class Meta:
         model = ProductImage
-        fields = ('id', 'image', 'is_primary')
-    
-    def get_image(self, obj):
-        request = self.context.get('request')
-        if obj.image and request:
-            return request.build_absolute_uri(obj.image.url)
-        return obj.image.url if obj.image else None
+        fields = ('id', 'image', 'video', 'is_primary')
 
 class ProductVariantSerializer(serializers.ModelSerializer):
     class Meta:
@@ -26,21 +19,29 @@ class ProductVariantSerializer(serializers.ModelSerializer):
 
 class ProductSerializer(serializers.ModelSerializer):
     category = serializers.SerializerMethodField()
-    images = serializers.SerializerMethodField()
     variants = ProductVariantSerializer(many=True, read_only=True)
     
+    # Explicitly defining these as MethodFields to avoid "Field name not valid" error
+    images = serializers.SerializerMethodField()
+    videos = serializers.SerializerMethodField()
+    
+    # Mapped fields
     originalPrice = serializers.DecimalField(source='original_price', max_digits=10, decimal_places=2, required=False, allow_null=True)
     washCare = serializers.CharField(source='wash_care', required=False)
     isNew = serializers.BooleanField(source='is_new', required=False)
-
+    
     class Meta:
         model = Product
         fields = (
             'id', 'title', 'slug', 'sku', 'description', 
             'price', 'originalPrice', 
             'fabric', 'color', 'washCare', 
-            'category', 'images', 'variants',
-            'isNew', 'badge', 'is_active'
+            'category', 
+            'images', # Matches the SerializerMethodField above
+            'videos', # Matches the SerializerMethodField above
+            'variants',
+            'isNew', 'badge', 'is_active', 
+            'disclaimer', 'manufacturer_name', 'manufacturer_address', 'country_of_origin'
         )
 
     def get_category(self, obj):
@@ -48,21 +49,35 @@ class ProductSerializer(serializers.ModelSerializer):
 
     def get_images(self, obj):
         request = self.context.get('request')
-        images = obj.images.all()
-        if request:
-            return [request.build_absolute_uri(img.image.url) for img in images]
-        return [img.image.url for img in images]
+        # Filter only items that have an image
+        media_items = obj.media.filter(image__isnull=False).exclude(image='')
+        urls = []
+        for item in media_items:
+            if item.image:
+                if request:
+                    urls.append(request.build_absolute_uri(item.image.url))
+                else:
+                    urls.append(item.image.url)
+        return urls
 
-    def get_sizes(self, obj):
-        return [variant.size for variant in obj.variants.all()]
+    def get_videos(self, obj):
+        request = self.context.get('request')
+        # Filter only items that have a video
+        media_items = obj.media.filter(video__isnull=False).exclude(video='')
+        urls = []
+        for item in media_items:
+            if item.video:
+                if request:
+                    urls.append(request.build_absolute_uri(item.video.url))
+                else:
+                    urls.append(item.video.url)
+        return urls
 
-# NEW: Coupon Serializer
 class CouponSerializer(serializers.ModelSerializer):
     class Meta:
         model = Coupon
         fields = ('id', 'code', 'discount_type', 'value', 'min_order_value', 'valid_from', 'valid_to', 'active')
 
-# NEW: Site Config Serializer
 class SiteConfigSerializer(serializers.ModelSerializer):
     class Meta:
         model = SiteConfig

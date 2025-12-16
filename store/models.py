@@ -3,8 +3,8 @@ from django.utils.text import slugify
 
 class Category(models.Model):
     name = models.CharField(max_length=100)
-    slug = models.SlugField(unique=True, blank=True)
-    image = models.ImageField(upload_to='categories/', blank=True, null=True) # Added to match serializer
+    slug = models.SlugField(unique=True)
+    image = models.ImageField(upload_to='categories/', blank=True, null=True)
     description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -22,25 +22,32 @@ class Category(models.Model):
 class Product(models.Model):
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='products')
     title = models.CharField(max_length=255)
-    slug = models.SlugField(unique=True, blank=True)
-    sku = models.CharField(max_length=50, unique=True) # Moving SKU to main product for display
+    slug = models.SlugField(unique=True)
+    sku = models.CharField(max_length=50, unique=True)
     description = models.TextField()
     
     # Pricing
     price = models.DecimalField(max_digits=10, decimal_places=2, help_text="Selling Price")
     original_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, help_text="MRP (Strikethrough price)")
     
-    # Product Details (Added to match Frontend)
+    # Product Details
     fabric = models.CharField(max_length=100, blank=True)
     color = models.CharField(max_length=50, blank=True)
     wash_care = models.CharField(max_length=100, blank=True, default="Dry clean only")
     
+    # Accordion Fields
+    disclaimer = models.TextField(blank=True, default="Product color may slightly vary due to photographic lighting or your device settings.")
+    manufacturer_name = models.CharField(max_length=100, blank=True, default="VINSARAA")
+    manufacturer_address = models.TextField(blank=True, default="Andhra Pradesh, India")
+    country_of_origin = models.CharField(max_length=50, default="India")
+
     # Flags & Badges
     is_active = models.BooleanField(default=True)
-    is_new = models.BooleanField(default=False, verbose_name="New Arrival") # Matches 'isNew' in frontend
+    is_new = models.BooleanField(default=False, verbose_name="New Arrival")
     badge = models.CharField(max_length=20, blank=True, null=True, help_text="e.g., 'FS' (Free Shipping), 'BESTSELLER'")
     
-    video_url = models.URLField(blank=True, null=True)
+    
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -53,12 +60,19 @@ class Product(models.Model):
         return self.title
 
 class ProductImage(models.Model):
-    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='images')
-    image = models.ImageField(upload_to='products/')
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='media') # Renamed related_name to 'media' for clarity
+    
+    # Now supports Image OR Video
+    image = models.ImageField(upload_to='products/', blank=True, null=True, help_text="Upload Image")
+    video = models.FileField(upload_to='product_videos/', blank=True, null=True, help_text="Upload Video (MP4)")
+    
     is_primary = models.BooleanField(default=False)
 
     def __str__(self):
         return f"Image for {self.product.title}"
+    class Meta:
+        verbose_name = "Product Image/Video"
+        verbose_name_plural = "Product Images/Videos"
 
 class ProductVariant(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='variants')
@@ -90,7 +104,6 @@ class Coupon(models.Model):
     def __str__(self):
         return self.code
 
-# Renamed verbose_name as requested
 class SiteConfig(models.Model):
     shipping_flat_rate = models.DecimalField(max_digits=10, decimal_places=2, default=100.00)
     shipping_free_above = models.DecimalField(max_digits=10, decimal_places=2, default=2000.00)
