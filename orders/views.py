@@ -1,10 +1,15 @@
+from decimal import Decimal
+
 from rest_framework import generics, status, views
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from django.conf import settings
 from django.shortcuts import get_object_or_404
+
 from .models import Cart, CartItem, Order, OrderItem
-from .serializers import CartSerializer
+from .serializers import CartSerializer, OrderSerializer
 from store.models import ProductVariant
+from payments.razorpay_client import create_order as razorpay_create_order
 
 # --- CART VIEWS ---
 
@@ -55,18 +60,96 @@ class CheckoutView(views.APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        # 1. Get the user's cart
-        try:
-            cart = Cart.objects.get(user=request.user)
-            if cart.items.count() == 0:
-                 return Response({"error": "Cart is empty"}, status=status.HTTP_400_BAD_REQUEST)
-        except Cart.DoesNotExist:
-            return Response({"error": "No cart found"}, status=status.HTTP_404_NOT_FOUND)
+        """
+        Checkout supports TWO modes:
+        1) Client-side cart (recommended): frontend sends line items in request.data["items"]
+        2) Legacy server cart: falls back to Cart model for the authenticated user
+        """
 
-        # 2. Calculate Total
-        total_amount = cart.total_price 
-        
-        # 3. Create the Order
+        items_payload = request.data.get("items")
+
+        order_line_items = []  # list of dicts: { "product_name", "size", "price_per_unit", "quantity" }
+        total_amount = Decimal("0.00")
+
+        if items_payload:
+            # --- MODE 1: CLIENT-SIDE CART SENT FROM FRONTEND ---
+            if not isinstance(items_payload, list):
+                return Response(
+                    {"error": "Invalid items format. Expected a list of items."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            for line in items_payload:
+                sku = line.get("sku")
+                size = line.get("size")
+                quantity = int(line.get("quantity", 1) or 1)
+
+                if not sku or not size:
+                    return Response(
+                        {"error": "Each item must include 'sku' and 'size'."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                variant = get_object_or_404(
+                    ProductVariant,
+                    product__sku=sku,
+                    size=size,
+                )
+
+                if variant.stock < quantity:
+                    return Response(
+                        {
+                            "error": f"Not enough stock for {variant.product.title} ({size})"
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                price_per_unit = variant.product.price + variant.additional_price
+                line_total = price_per_unit * quantity
+                total_amount += line_total
+
+                order_line_items.append(
+                    {
+                        "product_name": variant.product.title,
+                        "size": size,
+                        "price_per_unit": price_per_unit,
+                        "quantity": quantity,
+                    }
+                )
+        else:
+            # --- MODE 2: SERVER-SIDE CART (if ever used) ---
+            try:
+                cart = Cart.objects.get(user=request.user)
+                if cart.items.count() == 0:
+                    return Response(
+                        {"error": "Cart is empty"}, status=status.HTTP_400_BAD_REQUEST
+                    )
+            except Cart.DoesNotExist:
+                return Response(
+                    {"error": "No cart found for this user"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            # Use server cart totals
+            total_amount = cart.total_price
+
+            for item in cart.items.all():
+                price_per_unit = (
+                    item.variant.product.price + item.variant.additional_price
+                )
+                order_line_items.append(
+                    {
+                        "product_name": item.variant.product.title,
+                        "size": item.variant.size,
+                        "price_per_unit": price_per_unit,
+                        "quantity": item.quantity,
+                    }
+                )
+
+            # We'll clear the server cart after creating the order (see below)
+            cart_to_clear = cart
+
+        # 2. Create the Order
         shipping_address = request.data.get('address', 'No address provided')
         phone = request.data.get('phone', '')
 
@@ -79,29 +162,60 @@ class CheckoutView(views.APIView):
             order_status='pending'  # Explicitly set to pending
         )
 
-        # 4. Move items from Cart to Order
-        for item in cart.items.all():
-            # Calculate price per unit correctly
-            price_per_unit = item.variant.product.price + item.variant.additional_price
-            
+        # 3. Move items into OrderItems (from whichever mode built order_line_items)
+        for line in order_line_items:
             OrderItem.objects.create(
                 order=order,
-                product_name=item.variant.product.title,
-                variant_label=f"Size: {item.variant.size}",
-                price=price_per_unit,
-                quantity=item.quantity
+                product_name=line["product_name"],
+                variant_label=f"Size: {line['size']}",
+                price=line["price_per_unit"],
+                quantity=line["quantity"],
             )
-            
-            # CRITICAL: Stock is NOT deducted here!
-            # Stock will be deducted only after payment verification succeeds
-            # See Phase 3: Payment verification view for stock deduction logic
 
-        # 5. Clear the Cart
-        cart.items.all().delete()
+        # CRITICAL: Stock is NOT deducted here!
+        # Stock will be deducted only after payment verification succeeds
+        # (see payments.VerifyPaymentView)
 
-        return Response({
-            "message": "Order created successfully. Payment pending.", 
-            "order_id": order.id,
-            "order_status": order.order_status,
-            "payment_status": order.payment_status
-        }, status=status.HTTP_201_CREATED)
+        # 4. Clear server-side cart if we used it
+        if items_payload is None and "cart_to_clear" in locals():
+            cart_to_clear.items.all().delete()
+
+
+class OrderHistoryView(generics.ListAPIView):
+    """
+    Returns the authenticated user's past orders, newest first.
+    """
+
+    serializer_class = OrderSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Order.objects.filter(user=self.request.user).order_by("-created_at")
+
+        # 6. Create Razorpay Order (amount in rupees → paise handled in utility)
+        try:
+            razorpay_order = razorpay_create_order(total_amount, currency="INR")
+        except Exception as exc:
+            # If Razorpay order creation fails, surface a clear error.
+            return Response(
+                {"error": "Failed to create Razorpay order", "details": str(exc)},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        # Save Razorpay order id on our Order model
+        order.razorpay_order_id = razorpay_order.get("id")
+        order.save(update_fields=["razorpay_order_id"])
+
+        # 7. Respond with data needed by frontend Razorpay widget
+        return Response(
+            {
+                "id": order.id,
+                "razorpay_order_id": order.razorpay_order_id,
+                "amount": razorpay_order.get("amount"),  # in paise
+                "currency": razorpay_order.get("currency", "INR"),
+                "key": getattr(settings, "RAZORPAY_KEY_ID", ""),
+                "order_status": order.order_status,
+                "payment_status": order.payment_status,
+            },
+            status=status.HTTP_201_CREATED,
+        )

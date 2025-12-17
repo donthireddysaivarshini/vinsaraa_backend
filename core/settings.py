@@ -2,8 +2,16 @@ import os
 from pathlib import Path
 from datetime import timedelta
 
+import environ
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Environment configuration (.env support)
+env = environ.Env()
+env_file = BASE_DIR / ".env"
+if env_file.exists():
+    env.read_env(str(env_file))
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-change-me-later'
@@ -168,3 +176,7 @@ SOCIALACCOUNT_PROVIDERS = {
         }
     }
 }
+
+# --- Razorpay Credentials (Loaded from Environment / .env) ---
+RAZORPAY_KEY_ID = env("RAZORPAY_KEY_ID", default=os.environ.get("RAZORPAY_KEY_ID", ""))
+RAZORPAY_KEY_SECRET = env("RAZORPAY_KEY_SECRET", default=os.environ.get("RAZORPAY_KEY_SECRET", ""))
