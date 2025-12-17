@@ -75,27 +75,33 @@ class CheckoutView(views.APIView):
             shipping_address=shipping_address,
             phone=phone,
             total_amount=total_amount,
-            payment_status='Pending'
+            payment_status='Pending',
+            order_status='pending'  # Explicitly set to pending
         )
 
         # 4. Move items from Cart to Order
         for item in cart.items.all():
+            # Calculate price per unit correctly
+            price_per_unit = item.variant.product.price + item.variant.additional_price
+            
             OrderItem.objects.create(
                 order=order,
                 product_name=item.variant.product.title,
                 variant_label=f"Size: {item.variant.size}",
-                price=item.price_per_unit,
+                price=price_per_unit,
                 quantity=item.quantity
             )
             
-            # Reduce Stock
-            item.variant.stock -= item.quantity
-            item.variant.save()
+            # CRITICAL: Stock is NOT deducted here!
+            # Stock will be deducted only after payment verification succeeds
+            # See Phase 3: Payment verification view for stock deduction logic
 
         # 5. Clear the Cart
         cart.items.all().delete()
 
         return Response({
-            "message": "Order placed successfully", 
-            "order_id": order.id
+            "message": "Order created successfully. Payment pending.", 
+            "order_id": order.id,
+            "order_status": order.order_status,
+            "payment_status": order.payment_status
         }, status=status.HTTP_201_CREATED)

@@ -18,8 +18,13 @@ class CartItem(models.Model):
     quantity = models.PositiveIntegerField(default=1)
 
     @property
+    def price_per_unit(self):
+        """Calculate price per unit (product price + variant additional price)"""
+        return self.variant.product.price + self.variant.additional_price
+    
+    @property
     def total_price(self):
-        return (self.variant.product.price + self.variant.additional_price) * self.quantity
+        return self.price_per_unit * self.quantity
 
 # --- ORDER MODELS (Final Receipt) ---
 class Order(models.Model):
@@ -40,6 +45,11 @@ class Order(models.Model):
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
     payment_status = models.CharField(max_length=20, default='Pending')
     order_status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    
+    # Razorpay Integration Fields
+    razorpay_order_id = models.CharField(max_length=255, blank=True, null=True, help_text="Razorpay Order ID")
+    razorpay_payment_id = models.CharField(max_length=255, blank=True, null=True, help_text="Razorpay Payment ID")
+    razorpay_signature = models.CharField(max_length=255, blank=True, null=True, help_text="Razorpay Signature")
     
     created_at = models.DateTimeField(auto_now_add=True)
 
