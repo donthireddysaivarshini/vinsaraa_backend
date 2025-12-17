@@ -6,7 +6,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from orders.models import Cart, Order, OrderItem
+from orders.models import Order, OrderItem
 from payments.razorpay_client import verify_payment_signature
 from store.models import ProductVariant
 
@@ -37,16 +37,7 @@ class VerifyPaymentView(APIView):
                 razorpay_signature=razorpay_signature,
             )
         except Exception as exc:
-            # Signature invalid or Razorpay error → keep order pending or mark as failed
-            with transaction.atomic():
-                order = (
-                    Order.objects.select_for_update()
-                    .filter(razorpay_order_id=razorpay_order_id, user=request.user)
-                    .first()
-                )
-                if order:
-                    order.payment_status = "Failed"
-                    order.save(update_fields=["payment_status"])
+            # Signature invalid or Razorpay error
             return Response(
                 {"error": "Payment verification failed", "details": str(exc)},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -125,9 +116,6 @@ class VerifyPaymentView(APIView):
                 variant.save()
 
             order.save()
-
-            # 4. Clear any server-side cart for this user (if used)
-            Cart.objects.filter(user=order.user).delete()
 
         return Response(
             {

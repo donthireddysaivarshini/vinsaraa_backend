@@ -7,7 +7,7 @@ from django.conf import settings
 from django.shortcuts import get_object_or_404
 
 from .models import Cart, CartItem, Order, OrderItem
-from .serializers import CartSerializer, OrderSerializer
+from .serializers import CartSerializer
 from store.models import ProductVariant
 from payments.razorpay_client import create_order as razorpay_create_order
 
@@ -179,18 +179,6 @@ class CheckoutView(views.APIView):
         # 4. Clear server-side cart if we used it
         if items_payload is None and "cart_to_clear" in locals():
             cart_to_clear.items.all().delete()
-
-
-class OrderHistoryView(generics.ListAPIView):
-    """
-    Returns the authenticated user's past orders, newest first.
-    """
-
-    serializer_class = OrderSerializer
-    permission_classes = [IsAuthenticated]
-
-    def get_queryset(self):
-        return Order.objects.filter(user=self.request.user).order_by("-created_at")
 
         # 6. Create Razorpay Order (amount in rupees → paise handled in utility)
         try:
