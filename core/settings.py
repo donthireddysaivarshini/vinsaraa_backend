@@ -1,9 +1,15 @@
 import os
 from pathlib import Path
+from dotenv import load_dotenv
 from datetime import timedelta
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load environment variables from a local .env file (if present)
+# This ensures settings like RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET
+# are available even when you don't manually export them in the shell.
+load_dotenv(BASE_DIR / '.env')
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-change-me-later'
