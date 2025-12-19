@@ -1,15 +1,49 @@
 from decimal import Decimal
 
-from rest_framework import generics, status, views
+from rest_framework import generics, status, views,permissions
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.conf import settings
+from .models import Order
 from django.shortcuts import get_object_or_404
+from rest_framework.decorators import api_view, permission_classes
 
 from .models import Cart, CartItem, Order, OrderItem
 from .serializers import CartSerializer
 from store.models import ProductVariant
+from .serializers import OrderSerializer
 from payments.razorpay_client import create_order as razorpay_create_order
+
+from accounts.models import SavedAddress
+from .serializers import SavedAddressSerializer
+
+
+class UserOrdersView(generics.ListAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = OrderSerializer
+
+    def get_queryset(self):
+        return Order.objects.filter(user=self.request.user).prefetch_related("items").order_by("-created_at")
+
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def order_status(request, pk):
+    """
+    GET /orders/<pk>/status/  -> returns simple status data used by frontend polling
+    """
+    try:
+        order = Order.objects.prefetch_related("items").get(pk=pk, user=request.user)
+    except Order.DoesNotExist:
+        return Response({"detail": "Not found"}, status=404)
+
+    return Response({
+        "order_id": order.id,
+        "payment_status": order.payment_status,
+        "order_status": order.order_status,
+        "razorpay_order_id": order.razorpay_order_id,
+        "razorpay_payment_id": order.razorpay_payment_id,
+    })
 
 # --- CART VIEWS ---
 
@@ -53,6 +87,23 @@ class RemoveCartItemView(views.APIView):
         cart = Cart.objects.get(user=request.user)
         return Response(CartSerializer(cart).data)
 
+#Adress
+class SavedAddressListCreateView(generics.ListCreateAPIView):
+    serializer_class = SavedAddressSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        return SavedAddress.objects.filter(user=self.request.user)
+    
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+class SavedAddressDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = SavedAddressSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        return SavedAddress.objects.filter(user=self.request.user)
 
 # --- CHECKOUT VIEW (This was missing!) ---
 
@@ -150,8 +201,14 @@ class CheckoutView(views.APIView):
             cart_to_clear = cart
 
         # 2. Create the Order
-        shipping_address = request.data.get('address', 'No address provided')
+        address = request.data.get('address', '')
+        apartment = request.data.get('apartment', '')
+        city = request.data.get('city', '')
+        state = request.data.get('state', '')
+        zip_code = request.data.get('zip_code', '')
+        country = request.data.get('country', '')
         phone = request.data.get('phone', '')
+        shipping_address = f"{address}\n{apartment}\n{city}, {state} {zip_code}\n{country}".strip()
 
         order = Order.objects.create(
             user=request.user,

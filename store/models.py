@@ -33,13 +33,13 @@ class Product(models.Model):
     # Product Details
     fabric = models.CharField(max_length=100, blank=True)
     color = models.CharField(max_length=50, blank=True)
-    wash_care = models.CharField(max_length=100, blank=True, default="Dry clean only")
+    wash_care = models.CharField(max_length=100, blank=True)
     
     # Accordion Fields
-    disclaimer = models.TextField(blank=True, default="Product color may slightly vary due to photographic lighting or your device settings.")
-    manufacturer_name = models.CharField(max_length=100, blank=True, default="VINSARAA")
-    manufacturer_address = models.TextField(blank=True, default="Andhra Pradesh, India")
-    country_of_origin = models.CharField(max_length=50, default="India")
+    disclaimer = models.TextField(blank=True)
+    manufacturer_name = models.CharField(max_length=100, blank=True)
+    manufacturer_address = models.TextField(blank=True)
+    country_of_origin = models.CharField(max_length=50)
 
     # Flags & Badges
     is_active = models.BooleanField(default=True)

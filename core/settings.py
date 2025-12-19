@@ -179,3 +179,13 @@ SOCIALACCOUNT_PROVIDERS = {
 RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID", "")
 RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET", "")
 RAZORPAY_WEBHOOK_SECRET = os.environ.get("RAZORPAY_WEBHOOK_SECRET", "")
+# --- JWT SETTINGS FOR SOCIAL LOGIN ---
+REST_AUTH = {
+    'USE_JWT': True,
+    'JWT_AUTH_COOKIE': 'vinsaraa-auth',
+    'JWT_AUTH_REFRESH_COOKIE': 'vinsaraa-refresh',
+}
+
+
+# 3. Keep this for backward compatibility
+REST_USE_JWT = True

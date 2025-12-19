@@ -1,7 +1,33 @@
 from rest_framework import serializers
 from .models import Cart, CartItem
 from store.models import ProductImage
+from .models import Order, OrderItem
+from accounts.models import SavedAddress
 
+
+
+class OrderItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OrderItem
+        fields = ("id", "product_name", "variant_label", "price", "quantity")
+
+class OrderSerializer(serializers.ModelSerializer):
+    items = OrderItemSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Order
+        fields = (
+            "id",
+            "total_amount",
+            "payment_status",
+            "order_status",
+            "razorpay_order_id",
+            "razorpay_payment_id",
+            "created_at",
+            "shipping_address",
+            "phone",
+            "items",
+        )
 class CartItemSerializer(serializers.ModelSerializer):
     product_title = serializers.ReadOnlyField(source='variant.product.title')
     product_slug = serializers.ReadOnlyField(source='variant.product.slug')
@@ -28,3 +54,8 @@ class CartSerializer(serializers.ModelSerializer):
     class Meta:
         model = Cart
         fields = ('id', 'user', 'items', 'total_cart_price', 'updated_at')
+class SavedAddressSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SavedAddress
+        fields = ('id', 'label', 'address', 'apartment', 'city', 'state', 'zip_code', 'country', 'phone', 'is_default')
+        read_only_fields = ('id',)
