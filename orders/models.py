@@ -28,23 +28,27 @@ class CartItem(models.Model):
 
 # --- ORDER MODELS (Final Receipt) ---
 class Order(models.Model):
-    STATUS_CHOICES = (
-        ('pending', 'Pending'),
-        ('paid', 'Paid'),
-        ('shipped', 'Shipped'),
-        ('delivered', 'Delivered'),
-        ('cancelled', 'Cancelled'),
+    PAYMENT_STATUS_CHOICES = (
+        ('Pending', 'Pending'),
+        ('Paid', 'Paid'),
     )
+    
+    ORDER_STATUS_CHOICES = (
+        ('Processing', 'Processing'),
+        ('Shipped', 'Shipped'),
+        ('Delivered', 'Delivered'),
+    )
+    
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='orders')
     
-    # Shipping Info (Simplified for now)
+    # Shipping Info
     shipping_address = models.TextField()
     phone = models.CharField(max_length=20)
     
     # Payment Info
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
-    payment_status = models.CharField(max_length=20, default='Pending')
-    order_status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default='Pending')
+    order_status = models.CharField(max_length=20, choices=ORDER_STATUS_CHOICES, default='Processing')
     
     # Razorpay Integration Fields
     razorpay_order_id = models.CharField(max_length=255, blank=True, null=True, help_text="Razorpay Order ID")

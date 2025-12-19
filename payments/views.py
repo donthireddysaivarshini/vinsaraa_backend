@@ -23,7 +23,7 @@ class VerifyPaymentView(APIView):
     Verifies Razorpay payment and, if valid, safely deducts stock.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
 
     def post(self, request, *args, **kwargs):
         razorpay_order_id = request.data.get("razorpay_order_id")
@@ -67,7 +67,7 @@ class VerifyPaymentView(APIView):
                 )
 
             # If already paid, treat as idempotent success
-            if order.payment_status.lower() == "paid":
+            if order.payment_status == "Paid":
                 return Response(
                     {
                         "success": True,
@@ -77,11 +77,12 @@ class VerifyPaymentView(APIView):
                     status=status.HTTP_200_OK,
                 )
 
-            # Save payment identifiers
+            # Save payment identifiers and mark payment as Paid
+            # Keep order_status as Processing (NOT 'paid')
             order.razorpay_payment_id = razorpay_payment_id
             order.razorpay_signature = razorpay_signature
-            order.payment_status = "Pending" #should change to paid"
-            order.order_status = "paid"
+            order.payment_status = "Paid"  # ✅ ONLY payment_status changes
+            # order_status stays as 'Processing' (default)
 
             # 3. Deduct stock with row-level locks
             for item in order.items.all():
@@ -211,14 +212,15 @@ class RazorpayWebhookView(APIView):
                         logger.error("Order not found for razorpay_order_id=%s", razorpay_order_id)
                         return Response(status=status.HTTP_404_NOT_FOUND)
 
-                    if order.payment_status.lower() == "paid":
+                    if order.payment_status == "Paid":
                         logger.info("Order %s already marked as paid", order.id)
                         return Response({"status": "ok"}, status=status.HTTP_200_OK)
 
-                    # Update order payment fields
+                    # Update order payment fields ONLY
+                    # Set payment_status='Paid', leave order_status as 'Processing'
                     order.razorpay_payment_id = razorpay_payment_id
-                    order.payment_status = "Paid"
-                    order.order_status = "paid"
+                    order.payment_status = "Paid"  # ✅ ONLY payment_status
+                    # order_status stays as 'Processing' (default)
 
                     # Deduct stock
                     for item in order.items.all():

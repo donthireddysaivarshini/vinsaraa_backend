@@ -45,6 +45,57 @@ def order_status(request, pk):
         "razorpay_payment_id": order.razorpay_payment_id,
     })
 
+
+@api_view(["PATCH"])
+@permission_classes([permissions.IsAuthenticated])
+def update_order_status(request, pk):
+    """
+    PATCH /orders/<pk>/update-status/
+    Admin endpoint to update order status (only if payment is Paid).
+    Body: {"order_status": "Shipped"} or {"order_status": "Delivered"}
+    """
+    try:
+        order = Order.objects.get(pk=pk, user=request.user)
+    except Order.DoesNotExist:
+        return Response({"detail": "Order not found"}, status=404)
+    
+    # Check if user is staff (admin)
+    if not request.user.is_staff:
+        return Response(
+            {"detail": "Permission denied. Admin only."},
+            status=status.HTTP_403_FORBIDDEN
+        )
+    
+    # Check if payment is Paid before allowing status change
+    if order.payment_status != "Paid":
+        return Response(
+            {
+                "detail": "Cannot update order status while payment is Pending. "
+                          "Status can only be changed after payment is marked as Paid."
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    new_status = request.data.get("order_status")
+    valid_statuses = [choice[0] for choice in Order.ORDER_STATUS_CHOICES]
+    
+    if new_status not in valid_statuses:
+        return Response(
+            {
+                "detail": f"Invalid order status. Must be one of: {valid_statuses}"
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    order.order_status = new_status
+    order.save()
+    
+    return Response({
+        "order_id": order.id,
+        "order_status": order.order_status,
+        "message": "Order status updated successfully"
+    }, status=status.HTTP_200_OK)
+
 # --- CART VIEWS ---
 
 class CartView(views.APIView):
@@ -216,7 +267,7 @@ class CheckoutView(views.APIView):
             phone=phone,
             total_amount=total_amount,
             payment_status='Pending',
-            order_status='pending'  # Explicitly set to pending
+            order_status='Processing'  # Explicitly set to Processing, not pending
         )
 
         # 3. Move items into OrderItems (from whichever mode built order_line_items)
@@ -233,9 +284,13 @@ class CheckoutView(views.APIView):
         # Stock will be deducted only after payment verification succeeds
         # (see payments.VerifyPaymentView)
 
-        # 4. Clear server-side cart if we used it
-        if items_payload is None and "cart_to_clear" in locals():
-            cart_to_clear.items.all().delete()
+        # 4. Clear server-side cart (whether we used it or not)
+        # This ensures cart is always empty after checkout
+        try:
+            user_cart = Cart.objects.get(user=request.user)
+            user_cart.items.all().delete()  # Clear all cart items
+        except Cart.DoesNotExist:
+            pass  # No cart to clear, that's fine
 
         # 6. Create Razorpay Order (amount in rupees → paise handled in utility)
         try:
