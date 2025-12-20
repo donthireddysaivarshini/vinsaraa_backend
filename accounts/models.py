@@ -51,6 +51,8 @@ class Address(models.Model):
 class SavedAddress(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='saved_addresses')
     label = models.CharField(max_length=50, default='Home')  # Home, Office, etc.
+    first_name = models.CharField(max_length=50, blank=True)
+    last_name = models.CharField(max_length=50, blank=True)
     address = models.CharField(max_length=255)
     apartment = models.CharField(max_length=255, blank=True)
     city = models.CharField(max_length=100)
@@ -66,3 +68,9 @@ class SavedAddress(models.Model):
 
     def __str__(self):
         return f"{self.user.email} - {self.label}"
+
+    def save(self, *args, **kwargs):
+        # If this address is being set as default, unset any other default for this user.
+        if self.is_default:
+            type(self).objects.filter(user=self.user, is_default=True).exclude(pk=self.pk).update(is_default=False)
+        super().save(*args, **kwargs)

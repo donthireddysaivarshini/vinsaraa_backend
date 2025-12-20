@@ -7,6 +7,17 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+
+from .serializers import (
+    CustomTokenObtainPairSerializer,
+    RegisterSerializer,
+    UserSerializer,
+    # SavedAddress serializer
+    SavedAddressSerializer,
+)
+from .models import SavedAddress
 
 from .serializers import (
     CustomTokenObtainPairSerializer,
@@ -32,6 +43,27 @@ class UserProfileView(APIView):
     def get(self, request):
         serializer = UserSerializer(request.user)
         return Response(serializer.data)
+
+
+class SavedAddressViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated]
+    serializer_class = SavedAddressSerializer
+
+    def get_queryset(self):
+        return SavedAddress.objects.filter(user=self.request.user).order_by('-is_default', '-created_at')
+
+    def perform_create(self, serializer):
+        # serializer.create will use request from context to attach user
+        serializer.save()
+
+    @action(detail=True, methods=['post'], url_path='set-default')
+    def set_default(self, request, pk=None):
+        addr = self.get_object()
+        # Only owner can set default; get_object ensures queryset is user-scoped
+        addr.is_default = True
+        addr.save()  # model.save will unset others
+        serializer = self.get_serializer(addr)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 # --- 2. THE FINAL GOOGLE FIX ---
