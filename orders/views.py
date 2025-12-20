@@ -147,17 +147,6 @@ class SavedAddressListCreateView(generics.ListCreateAPIView):
         return SavedAddress.objects.filter(user=self.request.user)
     
     def perform_create(self, serializer):
-        # Enforce maximum 3 addresses per user
-        existing_count = SavedAddress.objects.filter(user=self.request.user).count()
-        if existing_count >= 3:
-            from rest_framework.exceptions import ValidationError
-            raise ValidationError({"detail": "You can save up to 3 addresses only."})
-
-        # If the new address is set as default, unset others
-        is_default = serializer.validated_data.get('is_default', False)
-        if is_default:
-            SavedAddress.objects.filter(user=self.request.user, is_default=True).update(is_default=False)
-
         serializer.save(user=self.request.user)
 
 class SavedAddressDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -166,25 +155,6 @@ class SavedAddressDetailView(generics.RetrieveUpdateDestroyAPIView):
     
     def get_queryset(self):
         return SavedAddress.objects.filter(user=self.request.user)
-
-    def perform_update(self, serializer):
-        # If marked default, unset others
-        is_default = serializer.validated_data.get('is_default', None)
-        if is_default:
-            SavedAddress.objects.filter(user=self.request.user, is_default=True).update(is_default=False)
-        serializer.save()
-
-    def perform_destroy(self, instance):
-        # Prevent deletion if it's the only address? Allow deletion but ensure defaults
-        was_default = instance.is_default
-        user = self.request.user
-        instance.delete()
-        if was_default:
-            # set any remaining address as default
-            remaining = SavedAddress.objects.filter(user=user).first()
-            if remaining:
-                remaining.is_default = True
-                remaining.save()
 
 # --- CHECKOUT VIEW (This was missing!) ---
 

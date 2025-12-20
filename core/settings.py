@@ -150,8 +150,31 @@ JAZZMIN_SETTINGS = {
     "site_brand": "Vinsaraa Collections",
     "welcome_sign": "Welcome to Vinsaraa Admin",
     "search_model": "accounts.CustomUser",
-    "show_ui_builder": True,
+
+    # 🔒 Disable UI builder (IMPORTANT)
+    "show_ui_builder": False,
+
+    # 📍 Sidebar always expanded
+    "navigation_expanded": True,
+
+    # 🧷 FIX SIDEBAR (THIS IS THE KEY)
+    "sidebar_fixed": True,
+
+    # 🧷 FIX NAVBAR (optional but recommended)
+    "navbar_fixed": True,
+
+    # 📌 App order stays consistent
+    "order_with_respect_to": [
+        "store",
+        "orders",
+        "accounts",
+        "auth",
+        "authtoken",
+        "sites",
+        "socialaccount",
+    ],
 }
+
 AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',             # Default Django Auth
     'allauth.account.auth_backends.AuthenticationBackend',   # Google Auth

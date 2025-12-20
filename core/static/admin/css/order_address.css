@@ -1,0 +1,44 @@
+/* Order Admin Address Column Styling */
+/* This CSS makes the address column wider and properly formatted for multi-line display */
+
+/* Make address column wider */
+#result_list td.field-shipping_address_preview {
+    min-width: 350px;
+    max-width: 400px;
+    padding: 15px 10px;
+    vertical-align: top;
+    word-wrap: break-word;
+    white-space: normal;
+}
+
+/* Make header match */
+#result_list th.field-shipping_address_preview {
+    min-width: 350px;
+    max-width: 400px;
+}
+
+/* Ensure proper line breaks in address */
+#result_list td.field-shipping_address_preview div {
+    display: block;
+    white-space: normal;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+/* Better table row height for multi-line content */
+#result_list tbody tr {
+    vertical-align: top;
+}
+
+/* Jazzmin compatibility - maintain consistent styling */
+#result_list td {
+    padding: 12px 10px;
+    border-bottom: 1px solid #e8e8e8;
+}
+
+/* Address text styling */
+#result_list td.field-shipping_address_preview {
+    font-size: 12px;
+    color: #333;
+    line-height: 1.6;
+}

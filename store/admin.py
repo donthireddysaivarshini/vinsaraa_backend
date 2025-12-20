@@ -62,4 +62,21 @@ class CouponAdmin(admin.ModelAdmin):
     list_display = ('code', 'discount_type', 'value', 'active', 'valid_to')
     list_filter = ('active', 'discount_type')
 
-admin.site.register(SiteConfig)
+@admin.register(SiteConfig)
+class SiteConfigAdmin(admin.ModelAdmin):
+    list_display = (
+        'shipping_flat_rate',
+        'shipping_free_above',
+        'tax_rate_percentage',
+     )
+    def has_add_permission(self, request):
+        """Allow adding SiteConfig"""
+        return True
+    
+    def has_delete_permission(self, request, obj=None):
+        """Allow deleting SiteConfig"""
+        return True
+
+# Hide ProductImage and ProductVariant - they are managed via inlines
+admin.site.unregister(ProductImage) if ProductImage in admin.site._registry else None
+admin.site.unregister(ProductVariant) if ProductVariant in admin.site._registry else None

@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import Order, OrderItem
+from .models import Order, OrderItem, Cart, CartItem
 
 # Order Admin
 class OrderItemInline(admin.TabularInline):
@@ -11,7 +11,7 @@ class OrderItemInline(admin.TabularInline):
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ('id', 'user_email', 'total_amount', 'payment_status_badge', 'order_status')
+    list_display = ('id', 'user_email', 'total_amount', 'shipping_address_preview', 'payment_status_badge', 'order_status')
     list_filter = ('payment_status', 'order_status', 'created_at')
     search_fields = ('user__email', 'razorpay_order_id')
     
@@ -21,6 +21,12 @@ class OrderAdmin(admin.ModelAdmin):
     
     # --- NEW CHANGE: Add Actions ---
     actions = ['mark_as_processing', 'mark_as_shipped', 'mark_as_delivered']
+    
+    # Add custom CSS for address column width
+    class Media:
+        css = {
+            'all': ('admin/css/order_address.css',)
+        }
 
     readonly_fields = (
         'user', 'total_amount', 'created_at',
@@ -67,6 +73,23 @@ class OrderAdmin(admin.ModelAdmin):
         return obj.user.email
     user_email.short_description = "User"
     
+    def shipping_address_preview(self, obj):
+        """Display full address with proper formatting (multiple lines)"""
+        if obj.shipping_address:
+            # Split address into lines and format with HTML
+            lines = obj.shipping_address.strip().split('\n')
+            formatted_lines = [line.strip() for line in lines if line.strip()]
+            
+            # Create HTML with proper styling (Jazzmin compatible)
+            html = '<div style="font-size: 12px; line-height: 1.5; color: #333; white-space: pre-wrap; word-wrap: break-word; max-width: 300px;">'
+            for line in formatted_lines:
+                html += f'{line}<br>'
+            html += '</div>'
+            
+            return format_html(html)
+        return '-'
+    shipping_address_preview.short_description = "Address"
+    
     def payment_status_badge(self, obj):
         """Display payment status with color"""
         if obj.payment_status == 'Paid':
@@ -100,3 +123,8 @@ class OrderItemAdmin(admin.ModelAdmin):
     def has_add_permission(self, request):
         """Disable adding order items"""
         return False
+
+
+# Hide Cart and CartItem - not needed in admin
+admin.site.unregister(Cart) if Cart in admin.site._registry else None
+admin.site.unregister(CartItem) if CartItem in admin.site._registry else None
