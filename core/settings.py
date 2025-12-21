@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     'store',
     'orders',
     'payments',
+    'web_content',
 ]
 # REQUIRED BY 'django.contrib.sites'
 SITE_ID = 1  # <--- NEW (Add this right after INSTALLED_APPS)
@@ -167,6 +168,7 @@ JAZZMIN_SETTINGS = {
     "order_with_respect_to": [
         "store",
         "orders",
+        "web_content",
         "accounts",
         "auth",
         "authtoken",
